@@ -68,8 +68,9 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 	//uint16_t start_bits = 0b00000001 1001 0000;
-	uint8_t txDataBuf[2] = {0b00000001, 0b1001}; //start bit, sgl, CH1
-	uint8_t rxDataBuf[2];
+	uint8_t txDataBuf[3] = {0x01, 0x80, 0x00}; //start bit, sgl, CH1
+	uint8_t rxDataBuf[3];
+	uint32_t min_reload = __HAL_TIM_GET_AUTORELOAD(&htim1) * 0.05;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -95,7 +96,8 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
-  HAL_TIM_Base_Start(&htim1);
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, min_reload);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -104,14 +106,15 @@ int main(void)
   {
 	  //ADC Communication
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // PB8, pull down CS
-	  HAL_SPI_TransmitReceive(&hspi1, *txDataBuf, *rxDataBuf, 1, HAL_MAX_DELAY);
+	  HAL_SPI_TransmitReceive(&hspi1, txDataBuf, rxDataBuf, 3, HAL_MAX_DELAY);
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
 
 	  //to PWM
-	  uint16_t adcData = (uint16_t)rxDataBuf[0] << 8 | (uint16_t)rxDataBuf[1]; //combine to 16bit
-	  adcData = adcData & 0b0000001111111111; // remove first 6 bits
-	  int count = (adcData / 1024) * (64000 * 0.05) + 3200; // to timer count
-	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1,count); // set compare register
+	  uint16_t adcData = (rxDataBuf[1] << 8) | rxDataBuf[2]; //combine to 16bit
+	  adcData = adcData & 0x3FF; // remove first 6 bits
+
+	  int count = (adcData / 1023.0) * min_reload + min_reload; // to timer count
+	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, count); // set compare register
 
 	  HAL_Delay(10);
     /* USER CODE END WHILE */
