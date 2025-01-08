@@ -19,6 +19,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -65,7 +67,9 @@ void SystemClock_Config(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+	//uint16_t start_bits = 0b00000001 1001 0000;
+	uint8_t txDataBuf[2] = {0b00000001, 0b1001}; //start bit, sgl, CH1
+	uint8_t rxDataBuf[2];
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -87,14 +91,28 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  //ADC Communication
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // PB8, pull down CS
+	  HAL_SPI_TransmitReceive(&hspi1, *txDataBuf, *rxDataBuf, 1, HAL_MAX_DELAY);
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+
+	  //to PWM
+	  uint16_t adcData = (uint16_t)rxDataBuf[0] << 8 | (uint16_t)rxDataBuf[1]; //combine to 16bit
+	  adcData = adcData & 0b0000001111111111; // remove first 6 bits
+	  int count = (adcData / 1024) * (64000 * 0.05) + 3200; // to timer count
+	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1,count); // set compare register
+
+	  HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
